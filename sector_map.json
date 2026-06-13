@@ -1,0 +1,20 @@
+{
+  "patterns": [
+    {"keywords": ["internet outage", "network down", "wifi down", "broadband"], "sector": "ISP", "tickers": ["CMCSA", "VZ", "TMUS", "LUMN"]},
+    {"keywords": ["oil price", "opec", "crude oil", "gas price", "petroleum"], "sector": "Energy", "tickers": ["XOM", "CVX", "COP", "FANG", "EOG"]},
+    {"keywords": ["roblox", "grow a garden"], "sector": "Gaming", "tickers": ["RBLX"]},
+    {"keywords": ["spacex", "starlink", "satellite", "rocket launch"], "sector": "Space/Satellite", "tickers": ["SATS", "IRDM", "GSAT"]},
+    {"keywords": ["iphone", "apple", "macbook", "ios update"], "sector": "Tech/Apple", "tickers": ["AAPL"]},
+    {"keywords": ["college world series", "world series", "nfl", "nba finals", "super bowl"], "sector": "Sports Media", "tickers": ["DIS", "WBD", "PARA"]},
+    {"keywords": ["ai model", "chatgpt", "openai", "artificial intelligence", "llm", "generative ai"], "sector": "AI", "tickers": ["NVDA", "MSFT", "GOOGL"]},
+    {"keywords": ["electric vehicle", "tesla", "cybertruck", "ev charging", "rivian", "lucid motors"], "sector": "EV", "tickers": ["TSLA", "RIVN", "LCID"]},
+    {"keywords": ["bitcoin", "crypto", "ethereum", "btc"], "sector": "Crypto", "tickers": ["COIN", "MARA", "RIOT"]},
+    {"keywords": ["semiconductor", "chip shortage", "tsmc", "nvidia"], "sector": "Semiconductors", "tickers": ["NVDA", "AMD", "AVGO", "TSM"]},
+    {"keywords": ["cloud computing", "aws outage", "azure"], "sector": "Cloud", "tickers": ["AMZN", "MSFT", "GOOGL"]},
+    {"keywords": ["streaming", "netflix", "disney plus", "hulu"], "sector": "Streaming", "tickers": ["NFLX", "DIS", "WBD"]},
+    {"keywords": ["cybersecurity", "data breach", "hack", "ransomware"], "sector": "Cybersecurity", "tickers": ["CRWD", "PANW", "ZS", "FTNT"]},
+    {"keywords": ["weight loss drug", "ozempic", "wegovy", "glp-1"], "sector": "Pharma/GLP1", "tickers": ["NVO", "LLY"]},
+    {"keywords": ["social media", "tiktok ban", "instagram", "twitter"], "sector": "Social Media", "tickers": ["META", "SNAP", "PINS"]}
+  ],
+  "negative_keywords": ["shooting", "shooter", "crash", "death", "dies", "passed away", "murder", "arrest", "killed", "accident", "fire", "tornado", "earthquake", "flood", "missing person", "obituary", "funeral", "hostage", "bomb threat", "explosion", "rip"]
+}
