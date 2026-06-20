@@ -60,13 +60,22 @@ Post to Discord in this format:
 • Events: {upcoming earnings/dividends if any}
 
 ---
+
+📋 **Watchlist Alerts**
+
+{For each item in watchlist_alerts:}
+
+**{ticker}** — ${price} ({5d_change}% / 30d: {30d_change}%)
+• {each alert on its own line}
+
+---
 🤖 Next scan in 24h
 ```
 
-If NO actionable signals found, post:
+If NO signals AND NO watchlist alerts, post:
 ```
 📊 **Stock Divergence Report** — {date}
-No actionable divergence signals today. Scanned {N} keywords, none showed hype/price mismatch.
+No actionable signals or watchlist alerts today.
 ```
 
 ## Rules

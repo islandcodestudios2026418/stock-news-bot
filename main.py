@@ -25,33 +25,37 @@ def check_tickers(tickers: list[str]):
 
 
 def scan():
-    """Full pipeline: trends → map → price → divergence → search queries for Kiro."""
+    """Full pipeline: trends → map → price → divergence → search queries + watchlist."""
     from mapper import map_keywords_to_tickers
     from divergence import detect_divergence
     from events import get_upcoming_events
     from search_queries import generate_search_queries
+    from watchlist import scan_watchlist
 
     print("1. Fetching Google Trends...", file=sys.stderr)
     keywords = get_trending_keywords(top_n=20)
 
     print("2. Mapping keywords → tickers...", file=sys.stderr)
     mapped = map_keywords_to_tickers(keywords)
-    if not mapped:
-        print(json.dumps({"signals": [], "search_queries": [], "note": "No mappable keywords today"}))
-        return
 
-    all_tickers = list({t for m in mapped for t in m["tickers"]})
+    signals, search_queries = [], []
+    if mapped:
+        all_tickers = list({t for m in mapped for t in m["tickers"]})
+        print(f"3. Fetching stock data for {len(all_tickers)} tickers...", file=sys.stderr)
+        stock_data = get_batch_stock_data(all_tickers)
 
-    print(f"3. Fetching stock data for {len(all_tickers)} tickers...", file=sys.stderr)
-    stock_data = get_batch_stock_data(all_tickers)
+        print("4. Detecting divergence...", file=sys.stderr)
+        signals = detect_divergence(mapped, stock_data)
+        for sig in signals:
+            sig["events"] = get_upcoming_events(sig["ticker"])
 
-    print("4. Detecting divergence...", file=sys.stderr)
-    signals = detect_divergence(mapped, stock_data)
-    for sig in signals:
-        sig["events"] = get_upcoming_events(sig["ticker"])
+        print("5. Generating search queries...", file=sys.stderr)
+        search_queries = generate_search_queries(mapped)
+    else:
+        print("3-5. No mappable keywords, skipping divergence.", file=sys.stderr)
 
-    print("5. Generating search queries for Kiro...", file=sys.stderr)
-    search_queries = generate_search_queries(mapped)
+    print("6. Scanning watchlist...", file=sys.stderr)
+    watchlist_alerts = scan_watchlist()
 
     report = {
         "generated_at": datetime.now().isoformat(),
@@ -59,6 +63,7 @@ def scan():
         "mapped_companies": len(mapped),
         "signals": signals,
         "search_queries": search_queries,
+        "watchlist_alerts": watchlist_alerts,
     }
     print(json.dumps(report, indent=2))
 
@@ -69,5 +74,8 @@ if __name__ == "__main__":
         check_tickers(sys.argv[2:])
     elif cmd == "scan":
         scan()
+    elif cmd == "watchlist":
+        from watchlist import scan_watchlist
+        print(json.dumps(scan_watchlist(), indent=2))
     else:
         gather()

@@ -1,0 +1,9 @@
+{
+  "tickers": ["NVDA", "AAPL", "TSLA", "MSFT", "GOOGL", "AMD", "META", "AMZN"],
+  "alerts": {
+    "price_drop_pct": -5,
+    "price_surge_pct": 5,
+    "volume_spike_threshold": 2.0,
+    "earnings_days_ahead": 7
+  }
+}
