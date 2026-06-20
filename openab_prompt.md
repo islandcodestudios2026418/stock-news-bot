@@ -12,6 +12,7 @@ cd ~/stock-news-bot && python main.py scan
 Parse the JSON output. It contains:
 - `signals`: stocks with hype/price divergence (pre-computed)
 - `search_queries`: queries YOU must web_search to gather forum sentiment
+- `watchlist_alerts`: your watchlist stocks that triggered alerts (price moves, volume, events) + recent news headlines
 
 ### Step 2: Execute search queries
 
@@ -67,6 +68,7 @@ Post to Discord in this format:
 
 **{ticker}** — ${price} ({5d_change}% / 30d: {30d_change}%)
 • {each alert on its own line}
+• 📰 {top news headline + source}
 
 ---
 🤖 Next scan in 24h
