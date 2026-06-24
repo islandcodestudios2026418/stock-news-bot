@@ -209,6 +209,28 @@ if __name__ == "__main__":
     elif cmd == "watchlist":
         from watchlist import scan_watchlist
         print(json.dumps(scan_watchlist(), indent=2))
+    elif cmd == "add":
+        from watchlist import add_ticker
+        for t in sys.argv[2:]:
+            print(add_ticker(t))
+    elif cmd == "remove":
+        from watchlist import remove_ticker
+        for t in sys.argv[2:]:
+            print(remove_ticker(t))
+    elif cmd == "threshold":
+        from watchlist import set_threshold
+        if len(sys.argv) >= 4:
+            print(set_threshold(sys.argv[2], float(sys.argv[3])))
+        else:
+            print("Usage: threshold <key> <value>")
+    elif cmd == "history":
+        from dedup import _load
+        history = _load()
+        # Show recent alerts sorted by date
+        items = sorted(history.items(), key=lambda x: x[1], reverse=True)
+        print(f"📜 Alert History ({len(items)} total, showing last 20):")
+        for key, ts in items[:20]:
+            print(f"  {ts[:16]} — {key[:12]}...")
     elif cmd == "filings":
         from edgar import get_batch_filings
         tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
