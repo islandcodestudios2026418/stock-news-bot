@@ -16,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 SNAPSHOTS_DIR = Path("snapshots")
 SNAPSHOTS_DIR.mkdir(exist_ok=True)
 
-_state = {"summary": "", "alerts": [], "tickers": {}, "updated_at": None}
+_state = {"summary": "", "alerts": [], "tickers": {}, "brief": [], "updated_at": None}
 _health = {"started_at": datetime.now(timezone.utc).isoformat(), "scans": 0, "errors": 0, "last_error": None}
 _lock = threading.Lock()
 
@@ -132,6 +132,10 @@ def _do_scan():
         _state["tickers"] = ticker_cards
         _state["updated_at"] = datetime.now(timezone.utc).isoformat()
 
+        # Generate actionable brief
+        from brief import generate_brief
+        _state["brief"] = generate_brief(ticker_cards, sentiment=sent, correlation=corr, macro=macro, rotation=rotation)
+
     snap_file = SNAPSHOTS_DIR / f"{date.today().isoformat()}.json"
     snap_data = {"summary": _state["summary"], "tickers": ticker_cards, "updated_at": _state["updated_at"]}
     snap_file.write_text(json.dumps(snap_data, indent=2), encoding="utf-8")
@@ -144,6 +148,10 @@ def _do_scan():
         new_alerts = deduplicate(alerts or [])
         if new_alerts:
             ranked = rank_alerts(new_alerts)
+            # Prepend brief to first alert's description
+            brief_text = "\n".join(_state.get("brief", []))
+            if brief_text and ranked:
+                ranked[0]["alerts"] = [f"**📋 Brief:**\n{brief_text}", ""] + ranked[0].get("alerts", [])
             discord_send(ranked)
             print(f"[scan] Discord: delivered {len(ranked)} new alerts", file=sys.stderr)
     except Exception as de:
@@ -201,12 +209,16 @@ pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
 .wl-tags{{display:flex;flex-wrap:wrap;gap:6px}}
 .wl-tag{{background:#2a2a4a;padding:4px 10px;border-radius:4px;font-size:0.8rem;display:flex;align-items:center;gap:4px}}
 .wl-tag button{{background:none;border:none;color:#ff5252;cursor:pointer;font-size:1rem;line-height:1}}
+.brief{{background:#1a2a1a;border:1px solid #2a4a2a;border-radius:12px;padding:1.2rem;margin-bottom:1.5rem}}
+.brief h2{{font-size:0.95rem;color:#00e676;margin-bottom:0.6rem}}
+.brief li{{margin-bottom:0.4rem;font-size:0.85rem;line-height:1.4}}
 </style></head><body>
 <div class="header">
   <h1>📡 Stock News Bot</h1>
   <div><button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
   <span class="updated">Updated: {updated}</span></div>
 </div>
+{brief_html}
 <div class="grid">{cards}</div>
 <div class="wl-section">
   <div class="wl-form"><input id="wl-input" placeholder="e.g. TSLA" onkeydown="if(event.key==='Enter')addTicker()">
@@ -248,15 +260,21 @@ def dashboard():
         summary = _state["summary"] or "Scanning..."
         updated = _state["updated_at"] or "loading..."
         tickers = _state["tickers"]
+        brief = _state.get("brief", [])
     config = json.loads(open("watchlist.json").read())
     wl_tags = "".join(f'<span class="wl-tag">{t}<button onclick="removeTicker(\'{t}\')">×</button></span>' for t in config.get("tickers", []))
-    return DASHBOARD_HTML.format(updated=updated, cards=_render_cards(tickers), summary=summary, watchlist_tags=wl_tags)
+    if brief:
+        brief_items = "".join(f"<li>{b}</li>" for b in brief)
+        brief_html = f'<div class="brief"><h2>🧠 Market Brief</h2><ul>{brief_items}</ul></div>'
+    else:
+        brief_html = ""
+    return DASHBOARD_HTML.format(updated=updated, cards=_render_cards(tickers), summary=summary, watchlist_tags=wl_tags, brief_html=brief_html)
 
 
 @app.get("/api/summary")
 def api_summary():
     with _lock:
-        return JSONResponse({"summary": _state["summary"], "updated_at": _state["updated_at"]})
+        return JSONResponse({"summary": _state["summary"], "brief": _state.get("brief", []), "updated_at": _state["updated_at"]})
 
 
 @app.get("/api/alerts")
