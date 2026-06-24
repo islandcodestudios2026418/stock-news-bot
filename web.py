@@ -179,6 +179,10 @@ app = FastAPI(title="Stock News Bot", lifespan=lifespan)
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f1a">
+<link rel="manifest" href="/manifest.json">
 <title>Stock Dashboard</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -227,10 +231,12 @@ pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
 </div>
 <div class="summary-box"><pre>{summary}</pre></div>
 <script>
-function refresh(){{fetch('/api/refresh',{{method:'POST'}}).then(()=>setTimeout(()=>location.reload(),45000))}}
+function refresh(){{fetch('/api/refresh',{{method:'POST'}}).then(()=>setTimeout(poll,45000))}}
 function addTicker(){{const i=document.getElementById('wl-input');const t=i.value.trim().toUpperCase();if(!t)return;fetch('/api/watchlist/add',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{ticker:t}})}}).then(()=>location.reload())}}
 function removeTicker(t){{fetch('/api/watchlist/remove',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{ticker:t}})}}).then(()=>location.reload())}}
-setTimeout(()=>location.reload(),300000);
+let lastUpdate='';
+function poll(){{fetch('/api/summary').then(r=>r.json()).then(d=>{{if(d.updated_at&&d.updated_at!==lastUpdate){{lastUpdate=d.updated_at;document.querySelector('.updated').textContent='Updated: '+d.updated_at;location.reload()}}}}catch(e=>{{}})}}
+setInterval(poll,60000);
 </script>
 </body></html>"""
 
@@ -340,6 +346,19 @@ def health():
         "errors": _health["errors"],
         "last_error": _health["last_error"],
         "last_scan": updated,
+    })
+
+
+@app.get("/manifest.json")
+def manifest():
+    return JSONResponse({
+        "name": "Stock News Bot",
+        "short_name": "StockBot",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0f0f1a",
+        "theme_color": "#0f0f1a",
+        "icons": [{"src": "https://em-content.zobj.net/source/twitter/408/satellite_1f4e1.png", "sizes": "72x72", "type": "image/png"}]
     })
 
 
