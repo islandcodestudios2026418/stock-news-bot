@@ -1,7 +1,14 @@
 """Gather real-time trend & stock data for Kiro CLI to analyze."""
 import json
 import sys
+import os
 from datetime import datetime
+
+# Fix Unicode output on Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 from trends import get_trending_keywords
 from price import get_stock_data, get_batch_stock_data
 
@@ -92,6 +99,48 @@ def deliver():
         print("❌ Discord delivery failed", file=sys.stderr)
 
 
+def summary():
+    """Compact market dashboard — all signals in one text block for Discord."""
+    from watchlist import scan_watchlist
+    from macro import get_macro_events
+    from earnings import get_batch_earnings
+
+    config = json.loads(open("watchlist.json").read())
+    tickers = config.get("tickers", [])
+
+    # Macro
+    macro = get_macro_events(days_ahead=7)
+    lines = [f"📊 **Market Dashboard** — {datetime.now().strftime('%Y-%m-%d %H:%M')}"]
+    if macro:
+        lines.append("\n🏛️ **Macro Events (7d):**")
+        for e in macro[:5]:
+            lines.append(f"  • {e['date']} — {e['event']} [{e['impact']}]")
+
+    # Earnings
+    earnings = get_batch_earnings(tickers)
+    upcoming_earn = [(t, e["upcoming"]) for t, e in earnings.items() if e.get("upcoming")]
+    if upcoming_earn:
+        lines.append("\n💰 **Upcoming Earnings:**")
+        for t, e in upcoming_earn:
+            est = f" (est ${e['eps_estimate']:.2f})" if e.get("eps_estimate") else ""
+            lines.append(f"  • {t} — {e['date']}{est}")
+
+    # Watchlist alerts summary
+    alerts = scan_watchlist()
+    if alerts:
+        lines.append(f"\n🚨 **Alerts ({len(alerts)} tickers):**")
+        for a in alerts:
+            top_alert = a["alerts"][0] if a["alerts"] else ""
+            lines.append(f"  • {a['ticker']} ${a['price']:.2f} ({a['change_5d_pct']:+.1f}% 5d) — {top_alert}")
+
+    if not macro and not upcoming_earn and not alerts:
+        lines.append("\n✅ All quiet. No notable events or alerts.")
+
+    output = "\n".join(lines)
+    print(output)
+    return output
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else None
     if cmd == "check":
@@ -100,6 +149,8 @@ if __name__ == "__main__":
         scan()
     elif cmd == "deliver":
         deliver()
+    elif cmd == "summary":
+        summary()
     elif cmd == "watchlist":
         from watchlist import scan_watchlist
         print(json.dumps(scan_watchlist(), indent=2))
@@ -111,5 +162,16 @@ if __name__ == "__main__":
         from ratings import get_batch_ratings
         tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
         print(json.dumps(get_batch_ratings(tickers), indent=2))
+    elif cmd == "earnings":
+        from earnings import get_batch_earnings
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_earnings(tickers), indent=2))
+    elif cmd == "macro":
+        from macro import get_macro_events
+        print(json.dumps(get_macro_events(), indent=2))
+    elif cmd == "options":
+        from options_flow import get_batch_options_flow
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_options_flow(tickers), indent=2))
     else:
         gather()

@@ -19,6 +19,8 @@ def scan_watchlist() -> list[dict]:
     from news import get_news
     from edgar import get_recent_filings
     from ratings import get_recent_ratings
+    from earnings import get_earnings
+    from options_flow import get_options_flow
 
     config = load_watchlist()
     tickers = config.get("tickers", [])
@@ -68,6 +70,20 @@ def scan_watchlist() -> list[dict]:
         ratings = get_recent_ratings(ticker, days=7)
         for r in ratings:
             triggered.append(f"⭐ {r['action']}: {r['firm']} → {r['to_grade']}")
+
+        # Earnings calendar
+        earn = get_earnings(ticker, days_ahead=earnings_days)
+        if earn.get("upcoming"):
+            triggered.append(f"💰 Earnings on {earn['upcoming']['date']}")
+        if earn.get("surprise"):
+            s = earn["surprise"]
+            triggered.append(f"💥 EPS surprise {s['surprise_pct']:+.1f}% on {s['date']}")
+
+        # Unusual options activity
+        options = get_options_flow(ticker)
+        if options:
+            top = options[0]
+            triggered.append(f"🎯 Unusual {top['type']} flow: ${top['strike']} exp {top['expiration']} ({top['vol_oi_ratio']}x vol/OI)")
 
         if triggered:
             alerts.append({
