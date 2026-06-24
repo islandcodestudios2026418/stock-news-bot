@@ -29,6 +29,8 @@ def _get_ticker_data(ticker):
     from ratings import get_batch_ratings
     from levels import get_batch_levels
     from news import get_news
+    from options_flow import get_options_flow
+    from short_interest import get_short_interest
 
     data = get_stock_data(ticker) or {}
     techs = get_batch_technicals([ticker]).get(ticker, {})
@@ -36,8 +38,10 @@ def _get_ticker_data(ticker):
     rate = get_batch_ratings([ticker]).get(ticker, {})
     lvl = get_batch_levels([ticker]).get(ticker, {})
     headlines = get_news(ticker, max_items=5)
+    options = get_options_flow(ticker)
+    short = get_short_interest(ticker)
 
-    return {**data, "technicals": techs, "earnings": earn, "ratings": rate, "levels": lvl, "news": headlines}
+    return {**data, "technicals": techs, "earnings": earn, "ratings": rate, "levels": lvl, "news": headlines, "options": options, "short": short}
 
 
 def _run_scan():
@@ -223,7 +227,7 @@ pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
 .config-row input{{background:#0f0f1a;border:1px solid #2a2a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;width:70px;font-size:0.8rem}}
 </style></head><body>
 <div class="header">
-  <h1>📡 Stock News Bot</h1>
+  <div><a href="/" style="color:#3498db;text-decoration:none;margin-right:1rem">📡 Dashboard</a><a href="/table" style="color:#3498db;text-decoration:none">📊 Table</a></div>
   <div><button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
   <span class="updated">Updated: {updated}</span></div>
 </div>
@@ -297,6 +301,56 @@ def api_summary():
 def api_alerts():
     with _lock:
         return JSONResponse({"alerts": _state["alerts"], "updated_at": _state["updated_at"]})
+
+
+@app.get("/table", response_class=HTMLResponse)
+def table_view():
+    """Sortable table view of all watchlist tickers."""
+    with _lock:
+        tickers = _state["tickers"]
+        updated = _state["updated_at"] or "loading..."
+
+    rows = ""
+    for t, d in sorted(tickers.items(), key=lambda x: x[1].get("change_5d_pct", 0)):
+        pct = d.get("change_5d_pct", 0)
+        cls = "up" if pct >= 0 else "down"
+        rsi = f"{d['rsi']:.0f}" if d.get("rsi") else "-"
+        vol = f"{d.get('volume_ratio',1):.1f}x" if d.get("volume_ratio",1) > 1.2 else "-"
+        sigs = ", ".join(d.get("signals", [])) or "-"
+        sup = f"${d['support']:.0f}" if d.get("support") else "-"
+        res = f"${d['resistance']:.0f}" if d.get("resistance") else "-"
+        earn = d.get("earnings_date", "-") or "-"
+        rows += f'<tr><td><a href="/ticker/{t}">{t}</a></td><td>${d.get("price",0):.2f}</td><td class="{cls}">{pct:+.1f}%</td><td>{rsi}</td><td>{vol}</td><td>{sup}</td><td>{res}</td><td>{earn}</td><td>{sigs}</td></tr>\n'
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Watchlist Table</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,system-ui,sans-serif;background:#0f0f1a;color:#e0e0e0;padding:1.5rem}}
+a{{color:#3498db;text-decoration:none}}
+nav{{margin-bottom:1rem;font-size:0.85rem}}
+nav a{{margin-right:1rem}}
+table{{width:100%;border-collapse:collapse;font-size:0.85rem}}
+th{{cursor:pointer;padding:8px;text-align:left;border-bottom:2px solid #3498db;color:#3498db}}
+th:hover{{background:#1a1a2e}}
+td{{padding:6px 8px;border-bottom:1px solid #1f1f3a}}
+tr:hover{{background:#1a1a2e}}
+.up{{color:#00e676}} .down{{color:#ff5252}}
+.updated{{color:#666;font-size:0.7rem;margin-top:1rem}}
+</style></head><body>
+<nav><a href="/">📡 Dashboard</a> <a href="/table">📊 Table</a></nav>
+<h2 style="margin-bottom:1rem">Watchlist Comparison</h2>
+<table id="tbl">
+<thead><tr><th onclick="sortTbl(0)">Ticker</th><th onclick="sortTbl(1)">Price</th><th onclick="sortTbl(2)">5d%</th><th onclick="sortTbl(3)">RSI</th><th onclick="sortTbl(4)">Vol</th><th onclick="sortTbl(5)">Support</th><th onclick="sortTbl(6)">Resist</th><th onclick="sortTbl(7)">Earnings</th><th onclick="sortTbl(8)">Signals</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>
+<div class="updated">Updated: {updated}</div>
+<script>
+let sortDir=1;
+function sortTbl(col){{const tb=document.querySelector('#tbl tbody');const rows=[...tb.rows];sortDir*=-1;rows.sort((a,b)=>{{let av=a.cells[col].textContent,bv=b.cells[col].textContent;const an=parseFloat(av.replace(/[$%x]/g,'')),bn=parseFloat(bv.replace(/[$%x]/g,''));if(!isNaN(an)&&!isNaN(bn))return(an-bn)*sortDir;return av.localeCompare(bv)*sortDir}});rows.forEach(r=>tb.appendChild(r))}}
+</script>
+</body></html>"""
 
 
 @app.get("/api/ticker/{symbol}")
@@ -437,6 +491,19 @@ def ticker_page(symbol: str):
     else:
         news_html = "No recent news"
 
+    options = data.get("options", [])
+    if options:
+        options_html = "".join(f'<div class="row"><span>{o["type"].upper()} ${o["strike"]} exp {o["expiration"]}</span><span>Vol/OI: {o["vol_oi_ratio"]}x | IV: {o["implied_vol"]}%</span></div>' for o in options[:5])
+    else:
+        options_html = "No unusual options activity"
+
+    short = data.get("short", {})
+    if short:
+        squeeze = "⚠️ SQUEEZE SIGNAL" if short.get("squeeze_signal") else "Normal"
+        short_html = f'<div class="row"><span class="label">Short % Float</span><span>{short.get("short_pct_float", "-")}%</span></div><div class="row"><span class="label">Days to Cover</span><span>{short.get("days_to_cover", "-")}</span></div><div class="row"><span class="label">Status</span><span>{squeeze}</span></div>'
+    else:
+        short_html = "No short interest data"
+
     html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{t} — Stock Detail</title>
@@ -453,7 +520,7 @@ h1{{margin-bottom:0.3rem}}
 .label{{color:#888}}
 .up{{color:#00e676}} .down{{color:#ff5252}}
 </style></head><body>
-<a href="/">← Dashboard</a>
+<a href="/">← Dashboard</a> | <a href="/table">Table</a>
 <h1>{t} — ${price:.2f} <span class="{cls}">({'+' if chg5>=0 else ''}{chg5:.1f}% 5d)</span></h1>
 <div class="sub">{name} · {sector}</div>
 
@@ -480,6 +547,14 @@ h1{{margin-bottom:0.3rem}}
 
 <div class="section"><h2>📰 News</h2>
 <div>{news_html}</div>
+</div>
+
+<div class="section"><h2>📈 Options Flow</h2>
+<div>{options_html}</div>
+</div>
+
+<div class="section"><h2>🩳 Short Interest</h2>
+<div>{short_html}</div>
 </div>
 </body></html>"""
     return html
