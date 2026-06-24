@@ -17,10 +17,11 @@ def load_watchlist() -> dict:
 def scan_watchlist() -> list[dict]:
     """Check watchlist stocks for alert conditions."""
     from news import get_news
-    from edgar import get_recent_filings
+    from edgar import get_recent_filings, get_insider_trades
     from ratings import get_recent_ratings
     from earnings import get_earnings
     from options_flow import get_options_flow
+    from short_interest import get_short_interest
 
     config = load_watchlist()
     tickers = config.get("tickers", [])
@@ -84,6 +85,20 @@ def scan_watchlist() -> list[dict]:
         if options:
             top = options[0]
             triggered.append(f"🎯 Unusual {top['type']} flow: ${top['strike']} exp {top['expiration']} ({top['vol_oi_ratio']}x vol/OI)")
+
+        # Short interest / squeeze signal
+        si = get_short_interest(ticker)
+        if si and si.get("squeeze_signal"):
+            triggered.append(f"🩳 High short interest: {si['short_pct_float']}% float, {si['days_to_cover']}d to cover")
+
+        # Insider trades (high-value)
+        insider = get_insider_trades(ticker, days=7)
+        buys = [t for t in insider if t["direction"] == "BUY" and t["value_usd"] > 100_000]
+        sells = [t for t in insider if t["direction"] == "SELL" and t["value_usd"] > 1_000_000]
+        for b in buys[:2]:
+            triggered.append(f"🟢 Insider BUY: {b['insider'][:20]} ${b['value_usd']:,}")
+        for s in sells[:2]:
+            triggered.append(f"🔻 Insider SELL: {s['insider'][:20]} ${s['value_usd']:,}")
 
         if triggered:
             alerts.append({

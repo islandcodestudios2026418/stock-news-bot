@@ -104,6 +104,7 @@ def summary():
     from watchlist import scan_watchlist
     from macro import get_macro_events
     from earnings import get_batch_earnings
+    from sector_rotation import get_sector_rotation
 
     config = json.loads(open("watchlist.json").read())
     tickers = config.get("tickers", [])
@@ -115,6 +116,17 @@ def summary():
         lines.append("\n🏛️ **Macro Events (7d):**")
         for e in macro[:5]:
             lines.append(f"  • {e['date']} — {e['event']} [{e['impact']}]")
+
+    # Sector rotation
+    rotation = get_sector_rotation()
+    if rotation:
+        inflows = [r for r in rotation if r.get("signal") == "inflow"]
+        outflows = [r for r in rotation if r.get("signal") == "outflow"]
+        lines.append("\n🔄 **Sector Rotation (5d):**")
+        for r in inflows:
+            lines.append(f"  📈 {r['sector']} ({r['etf']}) {r['change_pct']:+.1f}%")
+        for r in outflows:
+            lines.append(f"  📉 {r['sector']} ({r['etf']}) {r['change_pct']:+.1f}%")
 
     # Earnings
     earnings = get_batch_earnings(tickers)
@@ -133,12 +145,36 @@ def summary():
             top_alert = a["alerts"][0] if a["alerts"] else ""
             lines.append(f"  • {a['ticker']} ${a['price']:.2f} ({a['change_5d_pct']:+.1f}% 5d) — {top_alert}")
 
-    if not macro and not upcoming_earn and not alerts:
+    if not macro and not upcoming_earn and not alerts and not rotation:
         lines.append("\n✅ All quiet. No notable events or alerts.")
 
     output = "\n".join(lines)
     print(output)
     return output
+
+
+def deliver_summary():
+    """Send summary dashboard to Discord as a single embed."""
+    import os
+    url = os.environ.get("DISCORD_WEBHOOK_URL", "")
+    if not url:
+        print("❌ DISCORD_WEBHOOK_URL not set", file=sys.stderr)
+        return
+    text = summary()
+    # Discord embed has 4096 char description limit
+    payload = {
+        "embeds": [{
+            "title": f"📊 Market Dashboard — {datetime.now().strftime('%Y-%m-%d')}",
+            "description": text[:4096],
+            "color": 0x3498DB,
+        }]
+    }
+    import requests
+    r = requests.post(url, json=payload, timeout=10)
+    if r.status_code == 204:
+        print("✅ Summary delivered to Discord", file=sys.stderr)
+    else:
+        print(f"❌ Discord delivery failed: {r.status_code}", file=sys.stderr)
 
 
 if __name__ == "__main__":
@@ -149,6 +185,8 @@ if __name__ == "__main__":
         scan()
     elif cmd == "deliver":
         deliver()
+    elif cmd == "deliver_summary":
+        deliver_summary()
     elif cmd == "summary":
         summary()
     elif cmd == "watchlist":
@@ -173,5 +211,16 @@ if __name__ == "__main__":
         from options_flow import get_batch_options_flow
         tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
         print(json.dumps(get_batch_options_flow(tickers), indent=2))
+    elif cmd == "short":
+        from short_interest import get_batch_short_interest
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_short_interest(tickers), indent=2))
+    elif cmd == "sectors":
+        from sector_rotation import get_sector_rotation
+        print(json.dumps(get_sector_rotation(), indent=2))
+    elif cmd == "insider":
+        from edgar import get_insider_trades
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps({t: get_insider_trades(t) for t in tickers}, indent=2))
     else:
         gather()

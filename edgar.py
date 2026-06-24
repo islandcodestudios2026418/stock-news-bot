@@ -1,5 +1,6 @@
 """SEC EDGAR filing alerts — 8-K, Form 4 (insider trades), 13F."""
 import requests
+import yfinance as yf
 from datetime import datetime, timedelta
 
 HEADERS = {"User-Agent": "StockNewsBot/1.0 (personal use)"}
@@ -125,6 +126,43 @@ def _extract_xml_attr(text: str, tag: str, attr: str) -> str:
     val_start = attr_start + len(attr) + 2
     val_end = chunk.find('"', val_start)
     return chunk[val_start:val_end]
+
+
+def get_insider_trades(ticker: str, days: int = 14) -> list[dict]:
+    """Parse Form 4 filings with buy/sell direction and dollar values via yfinance."""
+    try:
+        t = yf.Ticker(ticker)
+        trades = t.insider_transactions
+        if trades is None or trades.empty:
+            return []
+        from datetime import datetime, timedelta
+        cutoff = datetime.now() - timedelta(days=days)
+        results = []
+        for _, row in trades.iterrows():
+            start_date = row.get("Start Date")
+            if start_date and hasattr(start_date, 'to_pydatetime'):
+                start_date = start_date.to_pydatetime()
+                if hasattr(start_date, 'replace') and start_date.tzinfo:
+                    start_date = start_date.replace(tzinfo=None)
+                if start_date < cutoff:
+                    continue
+            text = str(row.get("Text", ""))
+            shares = row.get("Shares", 0) or 0
+            value = row.get("Value", 0) or 0
+            insider = str(row.get("Insider", ""))
+            is_buy = "Purchase" in text or "Buy" in text
+            is_sell = "Sale" in text or "Sell" in text
+            results.append({
+                "date": start_date.strftime("%Y-%m-%d") if start_date else "",
+                "insider": insider,
+                "direction": "BUY" if is_buy else "SELL" if is_sell else "OTHER",
+                "shares": int(shares),
+                "value_usd": int(value),
+                "text": text[:80],
+            })
+        return results[:10]
+    except Exception:
+        return []
 
 
 def get_batch_filings(tickers: list[str], days: int = 14) -> dict:
