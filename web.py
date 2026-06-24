@@ -28,14 +28,16 @@ def _get_ticker_data(ticker):
     from earnings import get_batch_earnings
     from ratings import get_batch_ratings
     from levels import get_batch_levels
+    from news import get_news
 
     data = get_stock_data(ticker) or {}
     techs = get_batch_technicals([ticker]).get(ticker, {})
     earn = get_batch_earnings([ticker]).get(ticker, {})
     rate = get_batch_ratings([ticker]).get(ticker, {})
     lvl = get_batch_levels([ticker]).get(ticker, {})
+    headlines = get_news(ticker, max_items=5)
 
-    return {**data, "technicals": techs, "earnings": earn, "ratings": rate, "levels": lvl}
+    return {**data, "technicals": techs, "earnings": earn, "ratings": rate, "levels": lvl, "news": headlines}
 
 
 def _run_scan():
@@ -216,6 +218,9 @@ pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
 .brief{{background:#1a2a1a;border:1px solid #2a4a2a;border-radius:12px;padding:1.2rem;margin-bottom:1.5rem}}
 .brief h2{{font-size:0.95rem;color:#00e676;margin-bottom:0.6rem}}
 .brief li{{margin-bottom:0.4rem;font-size:0.85rem;line-height:1.4}}
+.config-row{{display:flex;align-items:center;gap:8px;margin-top:0.6rem;flex-wrap:wrap}}
+.config-row label{{font-size:0.75rem;color:#888;min-width:140px}}
+.config-row input{{background:#0f0f1a;border:1px solid #2a2a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;width:70px;font-size:0.8rem}}
 </style></head><body>
 <div class="header">
   <h1>📡 Stock News Bot</h1>
@@ -228,12 +233,14 @@ pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
   <div class="wl-form"><input id="wl-input" placeholder="e.g. TSLA" onkeydown="if(event.key==='Enter')addTicker()">
   <button class="refresh-btn" onclick="addTicker()">+ Add</button></div>
   <div class="wl-tags" id="wl-tags">{watchlist_tags}</div>
+  <div id="config-section">{config_html}</div>
 </div>
 <div class="summary-box"><pre>{summary}</pre></div>
 <script>
 function refresh(){{fetch('/api/refresh',{{method:'POST'}}).then(()=>setTimeout(poll,45000))}}
 function addTicker(){{const i=document.getElementById('wl-input');const t=i.value.trim().toUpperCase();if(!t)return;fetch('/api/watchlist/add',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{ticker:t}})}}).then(()=>location.reload())}}
 function removeTicker(t){{fetch('/api/watchlist/remove',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{ticker:t}})}}).then(()=>location.reload())}}
+function saveConfig(){{const inputs=document.querySelectorAll('.cfg-input');const body={{}};inputs.forEach(i=>body[i.name]=parseFloat(i.value));fetch('/api/config',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}).then(()=>{{document.getElementById('cfg-msg').textContent='✓ Saved';setTimeout(()=>document.getElementById('cfg-msg').textContent='',2000)}})}}
 let lastUpdate='';
 function poll(){{fetch('/api/summary').then(r=>r.json()).then(d=>{{if(d.updated_at&&d.updated_at!==lastUpdate){{lastUpdate=d.updated_at;document.querySelector('.updated').textContent='Updated: '+d.updated_at;location.reload()}}}}catch(e=>{{}})}}
 setInterval(poll,60000);
@@ -274,7 +281,10 @@ def dashboard():
         brief_html = f'<div class="brief"><h2>🧠 Market Brief</h2><ul>{brief_items}</ul></div>'
     else:
         brief_html = ""
-    return DASHBOARD_HTML.format(updated=updated, cards=_render_cards(tickers), summary=summary, watchlist_tags=wl_tags, brief_html=brief_html)
+    alerts_cfg = config.get("alerts", {})
+    cfg_rows = "".join(f'<div class="config-row"><label>{k}</label><input class="cfg-input" name="{k}" value="{v}"></div>' for k, v in alerts_cfg.items())
+    config_html = f'{cfg_rows}<div class="config-row"><button class="refresh-btn" onclick="saveConfig()">Save Thresholds</button><span id="cfg-msg" style="color:#00e676;font-size:0.75rem"></span></div>' if cfg_rows else ""
+    return DASHBOARD_HTML.format(updated=updated, cards=_render_cards(tickers), summary=summary, watchlist_tags=wl_tags, brief_html=brief_html, config_html=config_html)
 
 
 @app.get("/api/summary")
@@ -300,6 +310,26 @@ def api_ticker(symbol: str):
 def api_watchlist():
     config = json.loads(open("watchlist.json").read())
     return JSONResponse(config)
+
+
+@app.get("/api/config")
+def api_config():
+    """Return alert threshold configuration."""
+    config = json.loads(open("watchlist.json").read())
+    return JSONResponse(config.get("alerts", {}))
+
+
+@app.post("/api/config")
+def api_config_update(body: dict):
+    """Update alert thresholds. Accepts partial updates."""
+    config = json.loads(open("watchlist.json").read())
+    alerts = config.get("alerts", {})
+    for k, v in body.items():
+        if k in alerts:
+            alerts[k] = float(v)
+    config["alerts"] = alerts
+    Path("watchlist.json").write_text(json.dumps(config, indent=2))
+    return JSONResponse({"message": "Config updated", "alerts": alerts})
 
 
 @app.post("/api/watchlist/add")
@@ -401,6 +431,12 @@ def ticker_page(symbol: str):
     else:
         rating_str = "No recent changes"
 
+    headlines = data.get("news", [])
+    if headlines:
+        news_html = "".join(f'<div class="row"><a href="{h.get("url","#")}" target="_blank">{h.get("title","")}</a></div>' for h in headlines[:5])
+    else:
+        news_html = "No recent news"
+
     html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{t} — Stock Detail</title>
@@ -440,6 +476,10 @@ h1{{margin-bottom:0.3rem}}
 
 <div class="section"><h2>📊 Analyst Ratings</h2>
 <div>{rating_str}</div>
+</div>
+
+<div class="section"><h2>📰 News</h2>
+<div>{news_html}</div>
 </div>
 </body></html>"""
     return html
