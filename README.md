@@ -128,19 +128,36 @@ python main.py history           # View past alert history
 
 ## Web Dashboard (Zeabur)
 
-The bot includes a FastAPI web server that serves a live dashboard:
+The bot includes a full web dashboard with multiple pages:
 
 ```bash
 python web.py   # Starts on port 8080 (or $PORT)
 ```
 
-**Endpoints:**
-- `GET /` — HTML dashboard (auto-refreshes every 5 min)
-- `GET /api/summary` — JSON summary
-- `GET /api/alerts` — JSON alerts
-- `POST /api/refresh` — Trigger manual rescan
+**Pages:**
+- `/` — Main dashboard (market brief, ticker cards, watchlist management, config)
+- `/table` — Sortable comparison table (click column headers to sort)
+- `/ticker/NVDA` — Full ticker detail (technicals, levels, earnings, ratings, news, options flow, short interest)
 
-**Scheduled scans:** 8:30 AM ET pre-market + every hour during market hours (Mon-Fri).
+**API Endpoints:**
+- `GET /api/summary` — JSON summary + brief
+- `GET /api/alerts` — JSON alerts
+- `GET /api/ticker/{symbol}` — Full ticker data (JSON)
+- `GET /api/watchlist` — Watchlist config
+- `POST /api/watchlist/add` — Add ticker `{"ticker": "PLTR"}`
+- `POST /api/watchlist/remove` — Remove ticker
+- `GET /api/config` — Alert thresholds
+- `POST /api/config` — Update thresholds `{"price_drop_pct": -7}`
+- `GET /api/history?days=7` — Daily snapshots
+- `GET /health` — Uptime, scan count, errors
+- `POST /api/refresh` — Trigger manual rescan
+- `GET /manifest.json` — PWA manifest
+
+**Features:**
+- Auto-scans at 8:30 AM ET + hourly during market hours
+- AJAX live-update (polls every 60s, reloads on new data)
+- PWA support (add to home screen on mobile)
+- Auto-delivers new alerts to Discord after each scan
 
 **Deploy to Zeabur:**
 1. Push repo to GitHub
