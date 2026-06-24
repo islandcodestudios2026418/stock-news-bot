@@ -105,6 +105,8 @@ def summary():
     from macro import get_macro_events
     from earnings import get_batch_earnings
     from sector_rotation import get_sector_rotation
+    from correlation import get_correlation_alert
+    from technicals import get_batch_technicals
 
     config = json.loads(open("watchlist.json").read())
     tickers = config.get("tickers", [])
@@ -117,6 +119,12 @@ def summary():
         for e in macro[:5]:
             lines.append(f"  • {e['date']} — {e['event']} [{e['impact']}]")
 
+    # Correlation alert
+    corr = get_correlation_alert(tickers)
+    if corr.get("alert"):
+        lines.append(f"\n⚠️ **Correlation Alert:** {corr['signal']}")
+        lines.append(f"  Avg 5d change: {corr['avg_change_5d']:+.1f}%")
+
     # Sector rotation
     rotation = get_sector_rotation()
     if rotation:
@@ -127,6 +135,15 @@ def summary():
             lines.append(f"  📈 {r['sector']} ({r['etf']}) {r['change_pct']:+.1f}%")
         for r in outflows:
             lines.append(f"  📉 {r['sector']} ({r['etf']}) {r['change_pct']:+.1f}%")
+
+    # Technical signals summary
+    techs = get_batch_technicals(tickers)
+    notable_techs = [(t, d) for t, d in techs.items() if d.get("signals")]
+    if notable_techs:
+        lines.append("\n📐 **Technical Signals:**")
+        for t, d in notable_techs:
+            sigs = ", ".join(d["signals"])
+            lines.append(f"  • {t} RSI={d.get('rsi','-')} — {sigs}")
 
     # Earnings
     earnings = get_batch_earnings(tickers)
@@ -222,5 +239,13 @@ if __name__ == "__main__":
         from edgar import get_insider_trades
         tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
         print(json.dumps({t: get_insider_trades(t) for t in tickers}, indent=2))
+    elif cmd == "technicals":
+        from technicals import get_batch_technicals
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_technicals(tickers), indent=2))
+    elif cmd == "correlation":
+        from correlation import get_correlation_alert
+        tickers = sys.argv[2:] or None
+        print(json.dumps(get_correlation_alert(tickers), indent=2))
     else:
         gather()

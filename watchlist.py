@@ -22,6 +22,7 @@ def scan_watchlist() -> list[dict]:
     from earnings import get_earnings
     from options_flow import get_options_flow
     from short_interest import get_short_interest
+    from technicals import get_technicals
 
     config = load_watchlist()
     tickers = config.get("tickers", [])
@@ -99,6 +100,19 @@ def scan_watchlist() -> list[dict]:
             triggered.append(f"🟢 Insider BUY: {b['insider'][:20]} ${b['value_usd']:,}")
         for s in sells[:2]:
             triggered.append(f"🔻 Insider SELL: {s['insider'][:20]} ${s['value_usd']:,}")
+
+        # Technical indicators
+        tech = get_technicals(ticker)
+        if tech:
+            for sig in tech.get("signals", []):
+                if sig == "overbought":
+                    triggered.append(f"📈 RSI overbought ({tech['rsi']})")
+                elif sig == "oversold":
+                    triggered.append(f"📉 RSI oversold ({tech['rsi']})")
+                elif sig == "golden_cross":
+                    triggered.append("✨ Golden Cross (MA50 > MA200)")
+                elif sig == "death_cross":
+                    triggered.append("💀 Death Cross (MA50 < MA200)")
 
         if triggered:
             alerts.append({
