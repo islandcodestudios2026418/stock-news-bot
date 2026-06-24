@@ -3,9 +3,17 @@ import os, requests
 
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
+# Urgency → color mapping
+URGENCY_COLORS = {
+    "🔴 CRITICAL": 0xFF0000,
+    "🟠 HIGH": 0xFF8C00,
+    "🟡 MEDIUM": 0xFFD700,
+    "🟢 LOW": 0x00FF00,
+}
+
 
 def send_alerts(alerts: list[dict], webhook_url: str = None) -> bool:
-    """Send deduplicated alerts to Discord webhook. Returns True if sent."""
+    """Send scored alerts to Discord webhook. Returns True if sent."""
     url = webhook_url or WEBHOOK_URL
     if not url:
         raise ValueError("DISCORD_WEBHOOK_URL not set")
@@ -18,7 +26,8 @@ def send_alerts(alerts: list[dict], webhook_url: str = None) -> bool:
         name = alert.get("name", ticker)
         price = alert.get("price", 0)
         chg5 = alert.get("change_5d_pct", 0)
-        color = 0x00FF00 if chg5 >= 0 else 0xFF0000
+        urgency = alert.get("urgency", "🟢 LOW")
+        color = URGENCY_COLORS.get(urgency, 0x00FF00 if chg5 >= 0 else 0xFF0000)
 
         desc = "\n".join(alert["alerts"])
         news = alert.get("news", [])
@@ -26,8 +35,8 @@ def send_alerts(alerts: list[dict], webhook_url: str = None) -> bool:
             desc += "\n\n**Headlines:**\n" + "\n".join(f"• {n['title']}" for n in news[:3])
 
         embeds.append({
-            "title": f"{ticker} — ${price:.2f} ({chg5:+.1f}% 5d)",
-            "description": desc,
+            "title": f"{urgency} {ticker} — ${price:.2f} ({chg5:+.1f}% 5d)",
+            "description": desc[:4096],
             "color": color,
             "footer": {"text": name},
         })

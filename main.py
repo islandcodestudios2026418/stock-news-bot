@@ -76,10 +76,11 @@ def scan():
 
 
 def deliver():
-    """Scan watchlist → deduplicate → send new alerts to Discord."""
+    """Scan watchlist → deduplicate → score → send new alerts to Discord."""
     from watchlist import scan_watchlist
     from dedup import deduplicate
     from discord_hook import send_alerts
+    from scoring import rank_alerts
 
     print("Scanning watchlist...", file=sys.stderr)
     alerts = scan_watchlist()
@@ -92,9 +93,10 @@ def deliver():
         print("No new alerts to deliver.", file=sys.stderr)
         return
 
-    sent = send_alerts(new_alerts)
+    ranked = rank_alerts(new_alerts)
+    sent = send_alerts(ranked)
     if sent:
-        print(f"✅ Delivered {len(new_alerts)} alerts to Discord", file=sys.stderr)
+        print(f"✅ Delivered {len(ranked)} alerts to Discord (ranked by priority)", file=sys.stderr)
     else:
         print("❌ Discord delivery failed", file=sys.stderr)
 
