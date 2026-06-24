@@ -117,6 +117,12 @@ def summary():
 
     lines = [f"📊 **Market Dashboard** — {datetime.now().strftime('%Y-%m-%d %H:%M')}"]
 
+    # Market status
+    from market_hours import get_market_status
+    mkt = get_market_status()
+    status_emoji = {"open": "🟢", "pre_market": "🟡", "after_hours": "🟡", "closed": "🔴"}
+    lines[0] += f"  {status_emoji.get(mkt['session'], '⚪')} {mkt['label']} ({mkt['et_time']})"
+
     # Sentiment (Fear/Greed)
     sent = get_sentiment()
     if sent.get("vix"):
@@ -251,6 +257,16 @@ if __name__ == "__main__":
         print(f"📜 Alert History ({len(items)} total, showing last 20):")
         for key, ts in items[:20]:
             print(f"  {ts[:16]} — {key[:12]}...")
+    elif cmd == "status":
+        from market_hours import get_market_status
+        from watchlist import load_watchlist
+        from dedup import _load as load_history
+        mkt = get_market_status()
+        wl = load_watchlist()
+        hist = load_history()
+        print(f"{'🟢' if mkt['is_trading'] else '🔴'} {mkt['label']} ({mkt['et_time']}) | "
+              f"Watchlist: {len(wl.get('tickers', []))} tickers | "
+              f"Alerts sent: {len(hist)}")
     elif cmd == "filings":
         from edgar import get_batch_filings
         tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
