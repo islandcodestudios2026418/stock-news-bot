@@ -109,13 +109,23 @@ def summary():
     from sector_rotation import get_sector_rotation
     from correlation import get_correlation_alert
     from technicals import get_batch_technicals
+    from sentiment import get_sentiment
+    from levels import get_batch_levels
 
     config = json.loads(open("watchlist.json").read())
     tickers = config.get("tickers", [])
 
+    lines = [f"📊 **Market Dashboard** — {datetime.now().strftime('%Y-%m-%d %H:%M')}"]
+
+    # Sentiment (Fear/Greed)
+    sent = get_sentiment()
+    if sent.get("vix"):
+        bar = "█" * (sent["score"] // 10) + "░" * (10 - sent["score"] // 10)
+        lines.append(f"\n🧠 **Sentiment:** {sent['label']} ({sent['score']}/100) [{bar}]")
+        lines.append(f"  VIX: {sent['vix']} ({sent['vix_change_5d']:+.1f} 5d)")
+
     # Macro
     macro = get_macro_events(days_ahead=7)
-    lines = [f"📊 **Market Dashboard** — {datetime.now().strftime('%Y-%m-%d %H:%M')}"]
     if macro:
         lines.append("\n🏛️ **Macro Events (7d):**")
         for e in macro[:5]:
@@ -146,6 +156,14 @@ def summary():
         for t, d in notable_techs:
             sigs = ", ".join(d["signals"])
             lines.append(f"  • {t} RSI={d.get('rsi','-')} — {sigs}")
+
+    # Support/Resistance levels (only for stocks near key levels)
+    lvls = get_batch_levels(tickers)
+    near_level = [(t, l) for t, l in lvls.items() if l.get("support_pct") and abs(l["support_pct"]) < 3]
+    if near_level:
+        lines.append("\n🎯 **Near Key Levels:**")
+        for t, l in near_level:
+            lines.append(f"  • {t} ${l['price']} — support ${l['nearest_support']} ({l['support_pct']:+.1f}%)")
 
     # Earnings
     earnings = get_batch_earnings(tickers)
@@ -271,5 +289,12 @@ if __name__ == "__main__":
         from correlation import get_correlation_alert
         tickers = sys.argv[2:] or None
         print(json.dumps(get_correlation_alert(tickers), indent=2))
+    elif cmd == "sentiment":
+        from sentiment import get_sentiment
+        print(json.dumps(get_sentiment(), indent=2))
+    elif cmd == "levels":
+        from levels import get_batch_levels
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_levels(tickers), indent=2))
     else:
         gather()
