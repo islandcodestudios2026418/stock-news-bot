@@ -126,6 +126,28 @@ python main.py history           # View past alert history
 | 🟡 MEDIUM | 40-59 | Volume spike, options flow, analyst rating |
 | 🟢 LOW | <40 | SEC filing, upcoming event, earnings date |
 
+## Web Dashboard (Zeabur)
+
+The bot includes a FastAPI web server that serves a live dashboard:
+
+```bash
+python web.py   # Starts on port 8080 (or $PORT)
+```
+
+**Endpoints:**
+- `GET /` — HTML dashboard (auto-refreshes every 5 min)
+- `GET /api/summary` — JSON summary
+- `GET /api/alerts` — JSON alerts
+- `POST /api/refresh` — Trigger manual rescan
+
+**Scheduled scans:** 8:30 AM ET pre-market + every hour during market hours (Mon-Fri).
+
+**Deploy to Zeabur:**
+1. Push repo to GitHub
+2. Connect in Zeabur dashboard → auto-detects Dockerfile
+3. Set env vars: `DISCORD_WEBHOOK_URL`, `DISCORD_CRITICAL_WEBHOOK_URL` (optional)
+4. Dashboard is live at your Zeabur URL
+
 ## Automation (Cron)
 
 ```bash

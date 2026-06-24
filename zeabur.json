@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.zeabur.app/template.json",
+  "name": "stock-news-bot",
+  "build_type": "dockerfile",
+  "port": 8080,
+  "env": {
+    "PORT": "8080",
+    "DISCORD_WEBHOOK_URL": "",
+    "DISCORD_CRITICAL_WEBHOOK_URL": ""
+  }
+}
