@@ -5,3 +5,4 @@ alert_history.json
 .cache/
 
 *.log
+snapshots/
