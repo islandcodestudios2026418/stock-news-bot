@@ -125,6 +125,19 @@ def _run_scan():
         snap_data = {"summary": _state["summary"], "tickers": ticker_cards, "updated_at": _state["updated_at"]}
         snap_file.write_text(json.dumps(snap_data, indent=2), encoding="utf-8")
 
+        # Auto-deliver new alerts to Discord
+        try:
+            from dedup import deduplicate
+            from scoring import rank_alerts
+            from discord_hook import send_alerts as discord_send
+            new_alerts = deduplicate(alerts or [])
+            if new_alerts:
+                ranked = rank_alerts(new_alerts)
+                discord_send(ranked)
+                print(f"[scan] Discord: delivered {len(ranked)} new alerts", file=sys.stderr)
+        except Exception as de:
+            print(f"[scan] Discord delivery skipped: {de}", file=sys.stderr)
+
         print(f"[scan] Updated at {_state['updated_at']}", file=sys.stderr)
     except Exception as e:
         print(f"[scan] Error: {e}", file=sys.stderr)
@@ -172,6 +185,12 @@ h1{{color:#3498db;font-size:1.5rem}}
 pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
 .refresh-btn{{background:#3498db;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem}}
 .refresh-btn:hover{{background:#2980b9}}
+.wl-section{{margin-bottom:2rem;background:#1a1a2e;border-radius:12px;padding:1.2rem;border:1px solid #2a2a4a}}
+.wl-form{{display:flex;gap:8px;margin-bottom:0.8rem}}
+.wl-form input{{background:#0f0f1a;border:1px solid #2a2a4a;color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:0.85rem;width:120px}}
+.wl-tags{{display:flex;flex-wrap:wrap;gap:6px}}
+.wl-tag{{background:#2a2a4a;padding:4px 10px;border-radius:4px;font-size:0.8rem;display:flex;align-items:center;gap:4px}}
+.wl-tag button{{background:none;border:none;color:#ff5252;cursor:pointer;font-size:1rem;line-height:1}}
 </style></head><body>
 <div class="header">
   <h1>📡 Stock News Bot</h1>
@@ -179,9 +198,16 @@ pre{{white-space:pre-wrap;line-height:1.6;font-size:13px;font-family:monospace}}
   <span class="updated">Updated: {updated}</span></div>
 </div>
 <div class="grid">{cards}</div>
+<div class="wl-section">
+  <div class="wl-form"><input id="wl-input" placeholder="e.g. TSLA" onkeydown="if(event.key==='Enter')addTicker()">
+  <button class="refresh-btn" onclick="addTicker()">+ Add</button></div>
+  <div class="wl-tags" id="wl-tags">{watchlist_tags}</div>
+</div>
 <div class="summary-box"><pre>{summary}</pre></div>
 <script>
 function refresh(){{fetch('/api/refresh',{{method:'POST'}}).then(()=>setTimeout(()=>location.reload(),45000))}}
+function addTicker(){{const i=document.getElementById('wl-input');const t=i.value.trim().toUpperCase();if(!t)return;fetch('/api/watchlist/add',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{ticker:t}})}}).then(()=>location.reload())}}
+function removeTicker(t){{fetch('/api/watchlist/remove',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{ticker:t}})}}).then(()=>location.reload())}}
 setTimeout(()=>location.reload(),300000);
 </script>
 </body></html>"""
@@ -212,7 +238,9 @@ def dashboard():
         summary = _state["summary"] or "Scanning..."
         updated = _state["updated_at"] or "loading..."
         tickers = _state["tickers"]
-    return DASHBOARD_HTML.format(updated=updated, cards=_render_cards(tickers), summary=summary)
+    config = json.loads(open("watchlist.json").read())
+    wl_tags = "".join(f'<span class="wl-tag">{t}<button onclick="removeTicker(\'{t}\')">×</button></span>' for t in config.get("tickers", []))
+    return DASHBOARD_HTML.format(updated=updated, cards=_render_cards(tickers), summary=summary, watchlist_tags=wl_tags)
 
 
 @app.get("/api/summary")
@@ -232,6 +260,32 @@ def api_ticker(symbol: str):
     """Per-ticker detail endpoint."""
     data = _get_ticker_data(symbol.upper())
     return JSONResponse(data)
+
+
+@app.get("/api/watchlist")
+def api_watchlist():
+    config = json.loads(open("watchlist.json").read())
+    return JSONResponse(config)
+
+
+@app.post("/api/watchlist/add")
+def api_watchlist_add(body: dict):
+    from watchlist import add_ticker
+    ticker = body.get("ticker", "").upper()
+    if not ticker:
+        return JSONResponse({"error": "ticker required"}, status_code=400)
+    msg = add_ticker(ticker)
+    return JSONResponse({"message": msg, "ticker": ticker})
+
+
+@app.post("/api/watchlist/remove")
+def api_watchlist_remove(body: dict):
+    from watchlist import remove_ticker
+    ticker = body.get("ticker", "").upper()
+    if not ticker:
+        return JSONResponse({"error": "ticker required"}, status_code=400)
+    msg = remove_ticker(ticker)
+    return JSONResponse({"message": msg, "ticker": ticker})
 
 
 @app.get("/api/history")
