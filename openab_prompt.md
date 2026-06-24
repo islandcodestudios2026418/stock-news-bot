@@ -85,3 +85,11 @@ No actionable signals or watchlist alerts today.
 - If search results are ambiguous, default to ⚠️ WATCH not ✅ BUY
 - Never recommend buying, just flag divergence for Joshua to evaluate
 - Keep reports concise — max 5 signals per report
+
+## Quick Mode (no LLM judgment)
+For automated cron runs without Kiro intelligence:
+```bash
+cd ~/stock-news-bot && python main.py deliver
+```
+This runs: watchlist scan → dedup (skip already-sent) → Discord webhook.
+Requires `DISCORD_WEBHOOK_URL` env var.
