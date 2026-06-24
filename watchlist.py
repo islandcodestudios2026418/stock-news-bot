@@ -1,4 +1,4 @@
-"""Watchlist monitoring — alerts for price/volume/event anomalies."""
+"""Watchlist monitoring — alerts for price/volume/event/filing/rating anomalies."""
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,6 +17,9 @@ def load_watchlist() -> dict:
 def scan_watchlist() -> list[dict]:
     """Check watchlist stocks for alert conditions."""
     from news import get_news
+    from edgar import get_recent_filings
+    from ratings import get_recent_ratings
+
     config = load_watchlist()
     tickers = config.get("tickers", [])
     if not tickers:
@@ -56,6 +59,16 @@ def scan_watchlist() -> list[dict]:
             except (ValueError, KeyError):
                 pass
 
+        # SEC filings (8-K, Form 4, 13F)
+        filings = get_recent_filings(ticker, days=7)
+        for f in filings:
+            triggered.append(f"📋 SEC {f['form']} filed {f['filed']}")
+
+        # Analyst ratings
+        ratings = get_recent_ratings(ticker, days=7)
+        for r in ratings:
+            triggered.append(f"⭐ {r['action']}: {r['firm']} → {r['to_grade']}")
+
         if triggered:
             alerts.append({
                 "ticker": ticker,
@@ -66,6 +79,8 @@ def scan_watchlist() -> list[dict]:
                 "volume_spike": data["volume_spike"],
                 "alerts": triggered,
                 "events": events,
+                "filings": filings,
+                "ratings": ratings,
                 "news": get_news(ticker, 3),
             })
 

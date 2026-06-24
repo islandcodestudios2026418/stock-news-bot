@@ -1,3 +1,4 @@
 .env
 __pycache__/
 *.pyc
+alert_history.json

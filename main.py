@@ -68,14 +68,48 @@ def scan():
     print(json.dumps(report, indent=2))
 
 
+def deliver():
+    """Scan watchlist → deduplicate → send new alerts to Discord."""
+    from watchlist import scan_watchlist
+    from dedup import deduplicate
+    from discord_hook import send_alerts
+
+    print("Scanning watchlist...", file=sys.stderr)
+    alerts = scan_watchlist()
+    print(f"  {len(alerts)} tickers with alerts", file=sys.stderr)
+
+    new_alerts = deduplicate(alerts)
+    print(f"  {len(new_alerts)} tickers with NEW alerts (after dedup)", file=sys.stderr)
+
+    if not new_alerts:
+        print("No new alerts to deliver.", file=sys.stderr)
+        return
+
+    sent = send_alerts(new_alerts)
+    if sent:
+        print(f"✅ Delivered {len(new_alerts)} alerts to Discord", file=sys.stderr)
+    else:
+        print("❌ Discord delivery failed", file=sys.stderr)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else None
     if cmd == "check":
         check_tickers(sys.argv[2:])
     elif cmd == "scan":
         scan()
+    elif cmd == "deliver":
+        deliver()
     elif cmd == "watchlist":
         from watchlist import scan_watchlist
         print(json.dumps(scan_watchlist(), indent=2))
+    elif cmd == "filings":
+        from edgar import get_batch_filings
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_filings(tickers), indent=2))
+    elif cmd == "ratings":
+        from ratings import get_batch_ratings
+        tickers = sys.argv[2:] or json.loads(open("watchlist.json").read()).get("tickers", [])
+        print(json.dumps(get_batch_ratings(tickers), indent=2))
     else:
         gather()
